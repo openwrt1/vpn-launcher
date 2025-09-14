@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 1. 定义内容安全策略 (CSP) -->
+    <!-- 'self' 允许加载同源资源, 'unsafe-inline' 允许内联样式和脚本 (对于 onclick 属性是必需的) -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+
+    <title>VPN 控制器 (udp2raw + WireGuard)</title>
+    <link rel="stylesheet" href="node_modules/xterm/css/xterm.css" />
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; }
+        h2 {
+            text-align: center; /* 标题居中 */
+            font-size: 24px;
+            font-weight: 300; /* 使用更细的字体 */
+            color: #333;
+            /* 应用下面的动画效果 */
+            animation: glow 2.5s ease-in-out infinite alternate;
+        }
+        .control-button {
+            font-size: 16px; /* 增大字体 */
+            padding: 10px 20px; /* 增加内边距，让按钮更大 */
+            margin-right: 10px; /* 增加按钮间的间距 */
+            border-radius: 8px; /* 圆角效果 */
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        .description {
+            font-size: 12px;
+            color: #6c757d; /* 灰色文字 */
+            margin-top: 5px;
+            margin-bottom: 15px;
+            word-wrap: break-word; /* 允许长单词或URL换行 */
+        }
+        code {
+            background-color: #f1f1f1;
+            padding: 2px 4px;
+            border-radius: 4px;
+        }
+        .start-button { background-color: #d4edda; color: #155724; } /* 绿色系，表示启动 */
+        .stop-button { background-color: #f8d7da; color: #721c24; } /* 红色系，表示停止 */
+
+        /* 定义发光动画 */
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #0073e6, 0 0 20px #0073e6;
+            }
+            to {
+                text-shadow: 0 0 10px #fff, 0 0 15px #fff, 0 0 20px #0073e6, 0 0 25px #0073e6;
+            }
+        }
+    </style>
+</head>
+<body>
+<h2>VPN 控制器</h2>
+<p class="description">
+    本工具可代替手动运行: <code>sudo ./udp2raw_mp_mac -c -l 127.0.0.1:29999 -r 64.69.34.176:39001 -k "9OtvxqVF4kT2aGAJ" --raw-mode faketcp --cipher-mode xor</code>
+</p>
+<button class="control-button start-button" onclick="startVPN()">
+    🚀 启动 udp2raw + WireGuard
+</button>
+<button class="control-button stop-button" onclick="stopVPN()">
+    🛑 停止 udp2raw + WireGuard
+</button>
+
+<!-- xterm.js 将会挂载到这个 div 上 -->
+<div id="terminal" style="width: 100%; height: 450px; margin-top: 10px;"></div>
+
+<script src="renderer.js"></script>
+</body>
+</html>
