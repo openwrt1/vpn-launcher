@@ -8,6 +8,22 @@ let win;
 let ptyProcess = null;
 let appConfig = null; // 在内存中缓存配置
 
+const userConfigPath = path.join(app.getPath('userData'), 'config.json');
+const defaultConfigPath = path.join(__dirname, 'config.json');
+
+function ensureConfigFile() {
+    try {
+        if (!fs.existsSync(userConfigPath)) {
+            console.log(`用户配置文件不存在，正在从 ${defaultConfigPath} 创建...`);
+            const defaultConfigData = fs.readFileSync(defaultConfigPath, 'utf8');
+            fs.writeFileSync(userConfigPath, defaultConfigData, 'utf8');
+            console.log(`成功创建配置文件到: ${userConfigPath}`);
+        }
+    } catch (error) {
+        console.error('初始化配置文件时发生致命错误:', error);
+    }
+}
+
 function createWindow() {
     win = new BrowserWindow({
         width: 800,
@@ -24,17 +40,18 @@ function createWindow() {
         });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    ensureConfigFile();
+    createWindow();
+});
 
 function getAppConfig() {
-    // 不再缓存，总是从文件读取以获取最新信息
     try {
-        const configPath = path.join(__dirname, 'config.json');
-        const configData = fs.readFileSync(configPath, 'utf8');
+        const configData = fs.readFileSync(userConfigPath, 'utf8');
         appConfig = JSON.parse(configData);
         return appConfig;
     } catch (error) {
-        console.error('Error reading or parsing config.json:', error);
+        console.error('读取或解析 config.json 失败:', error);
         if (win) {
             win.webContents.send('vpn-error', `读取配置文件 config.json 失败: ${error.message}`);
         }
@@ -84,14 +101,14 @@ ipcMain.on('get-config', (event) => {
 
 ipcMain.on('save-config', (event, newConfig) => {
     try {
-        const configPath = path.join(__dirname, 'config.json');
-        // 使用 JSON.stringify 的第三个参数来格式化输出，使其更具可读性
         const configData = JSON.stringify(newConfig, null, 2);
-        fs.writeFileSync(configPath, configData, 'utf8');
-        event.reply('config-saved-success');
+        fs.writeFileSync(userConfigPath, configData, 'utf8');
+        // 成功时，返回保存路径
+        event.reply('config-saved-success', userConfigPath);
     } catch (error) {
-        console.error('Error writing config.json:', error);
-        win.webContents.send('vpn-error', `保存配置文件失败: ${error.message}`);
+        console.error('写入 config.json 失败:', error);
+        // 失败时，返回错误信息
+        event.reply('config-saved-failure', error.message);
     }
 });
 
@@ -118,8 +135,6 @@ ipcMain.on('start-vpn', (event, { nodeId, ipVersion }) => {
     
     startVpnProcess(udp2rawCmd);
 
-    // 将 nodeId 附加到 ptyProcess 对象上，以便稍后查找节点名称
-    // 必须在 startVpnProcess 创建了 ptyProcess 之后再执行
     if (ptyProcess) {
         ptyProcess.nodeId = nodeId;
     }
@@ -132,7 +147,6 @@ ipcMain.on('pty-input', (event, data) => {
 });
 
 function startWireGuardAppleScript(tunnelName) {
-    // 将隧道名称作为参数传递给 AppleScript
     const wgUpCommand = `osascript "/Users/rocket/Library/Mobile Documents/com~apple~ScriptEditor2/Documents/wg-up.scpt" "${tunnelName}"`;
     exec(wgUpCommand, (error, stdout, stderr) => {
         if (error || stderr) {

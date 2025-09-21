@@ -6,25 +6,71 @@
     <title>VPN 控制器 (udp2raw + WireGuard)</title>
     <link rel="stylesheet" href="node_modules/xterm/css/xterm.css" />
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; background-color: #f8f9fa; margin: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 10px; background-color: #f0f2f5; margin: 0; }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
         .tab-nav { display: flex; background-color: #e9ecef; border-bottom: 1px solid #dee2e6; }
-        .tab-button { padding: 10px 20px; cursor: pointer; border: none; background-color: transparent; font-size: 16px; }
-        .tab-button.active { background-color: #fff; border-top: 2px solid #007bff; }
-        .tab-content { display: none; padding: 20px; }
+        .tab-button { padding: 10px 20px; cursor: pointer; border: none; background-color: transparent; font-size: 16px; color: #6c757d; }
+        .tab-button.active { background-color: #f8f9fa; border-top: 3px solid #007bff; color: #007bff; font-weight: 500; }
+        .tab-content { display: none; padding: 20px; background-color: #f8f9fa; }
         .tab-content.active { display: block; }
         h2 { text-align: center; font-size: 24px; font-weight: 300; color: #333; animation: glow 2.5s ease-in-out infinite alternate; margin-top: 0; }
         .controls-container { display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 20px; }
-        #node-selector, .control-button, .settings-table input { font-size: 14px; padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; }
-        .start-button { background-color: #d4edda; color: #155724; }
-        .stop-button { background-color: #f8d7da; color: #721c24; }
-        #terminal-container { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+        #node-selector, .settings-table input { font-size: 14px; padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; background-color: #fff; }
+        #terminal-container { border: 1px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
         .settings-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         .settings-table th, .settings-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         .settings-table th { background-color: #f2f2f2; }
         .settings-table input { width: 95%; }
-        .action-button { padding: 5px 10px; font-size: 12px; cursor: pointer; border-radius: 4px; border: 1px solid; }
-        .delete-btn { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .add-btn, .save-btn { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb; margin-top: 15px; }
+
+        /* --- 统一的凹凸按钮样式 (已清理) --- */
+        .control-button {
+            font-size: 14px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s ease-out;
+            text-shadow: 0 1px 1px rgba(255, 255, 255, 0.5);
+            box-shadow:
+                0 2px 2px rgba(0, 0, 0, 0.15),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+        .control-button:hover {
+            transform: translateY(-2px);
+            box-shadow:
+                0 4px 5px rgba(0, 0, 0, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+        }
+        .control-button:active {
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        .control-button:disabled {
+            background-color: #e9ecef !important;
+            color: #adb5bd !important;
+            cursor: not-allowed;
+            transform: translateY(0);
+            box-shadow: none;
+            border-color: #ced4da;
+        }
+
+        /* --- 按钮颜色 --- */
+        .start-button { background-color: #c8e6c9; color: #255d3a; border-color: #a5d6a7; }
+        .stop-button { background-color: #ffcdd2; color: #c62828; border-color: #ef9a9a; }
+        .delete-btn { background-color: #ffcdd2; color: #c62828; border-color: #ef9a9a; font-size: 12px; padding: 5px 10px; }
+        .add-btn, .save-btn { background-color: #bbdefb; color: #0d47a1; border-color: #90caf9; margin-top: 15px; }
+
         @keyframes glow { from { text-shadow: 0 0 5px #fff, 0 0 10px #fff, 0 0 15px #0073e6, 0 0 20px #0073e6; } to { text-shadow: 0 0 10px #fff, 0 0 15px #fff, 0 0 20px #0073e6, 0 0 25px #0073e6; } }
     </style>
 </head>
@@ -39,7 +85,8 @@
 <div id="connect-tab" class="tab-content active">
     <h2>VPN 控制器</h2>
     <div class="controls-container">
-        <select id="node-selector"></select>
+        <label for="node-selector" class="visually-hidden">选择一个节点</label>
+        <select id="node-selector" aria-label="选择一个节点"></select>
         <div id="start-buttons-container"></div>
         <button class="control-button stop-button" onclick="stopVPN()">🛑 停止连接</button>
     </div>

@@ -85,13 +85,30 @@ function setupIPCListeners() {
         updateUI();
     });
 
-    ipcRenderer.on('config-saved-success', () => {
-        alert('配置已成功保存！');
+    ipcRenderer.on('config-saved-success', (event, path) => {
+        alert(`✅ 配置已成功保存！\n\n路径: ${path}`);
         ipcRenderer.send('get-config'); // 重新获取配置以刷新整个 UI
+    });
+
+    ipcRenderer.on('config-saved-failure', (event, error) => {
+        alert(`❌ 保存失败！\n\n原因: ${error}`);
     });
 }
 
-// --- 核心工具函数 (BUG 修复版) ---
+// --- 核心工具函数 ---
+
+function isValidIPv4(address) {
+    if (!address) return false;
+    const regex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}:[0-9]{1,5}$/;
+    return regex.test(address);
+}
+
+function isValidIPv6(address) {
+    if (!address) return false;
+    const regex = /^\[([a-fA-F0-9:]+)\]:[0-9]{1,5}$/;
+    return regex.test(address);
+}
+
 function getCleanName(name) {
     if (!name) return '';
     let cleanName = name.trim();
@@ -102,7 +119,7 @@ function getCleanName(name) {
             if (cleanName.startsWith(flag)) {
                 cleanName = cleanName.substring(flag.length).trim();
                 flagFound = true;
-                break; // 找到并移除一个后，从头开始重新扫描
+                break;
             }
         }
     } while (flagFound);
@@ -116,7 +133,7 @@ function getNodeDisplayName(nodeName) {
             return `${flagMap[keyword]} ${cleanName}`;
         }
     }
-    return cleanName; // 如果没找到匹配的，就返回清理后的名称
+    return cleanName;
 }
 
 // --- UI 更新 ---
@@ -148,20 +165,29 @@ function updateStartButtons() {
     const node = appConfig.nodes.find(n => n.id === selectedNodeId);
     if (!node) return;
 
-    if (node.ipv4_server) {
-        const btn = document.createElement('button');
-        btn.className = 'control-button start-button';
-        btn.textContent = `🚀 启动 IPv4`;
-        btn.onclick = () => startVPN(selectedNodeId, 'ipv4');
-        container.appendChild(btn);
+    const btn4 = document.createElement('button');
+    btn4.className = 'control-button start-button';
+    btn4.textContent = `🚀 启动 IPv4`;
+    const isIPv4Valid = isValidIPv4(node.ipv4_server);
+    if (isIPv4Valid) {
+        btn4.onclick = () => startVPN(selectedNodeId, 'ipv4');
+    } else {
+        btn4.disabled = true;
+        btn4.title = '无效或未配置 IPv4 地址 (格式应为 1.2.3.4:端口)';
     }
-    if (node.ipv6_server) {
-        const btn = document.createElement('button');
-        btn.className = 'control-button start-button';
-        btn.textContent = `🚀 启动 IPv6`;
-        btn.onclick = () => startVPN(selectedNodeId, 'ipv6');
-        container.appendChild(btn);
+    container.appendChild(btn4);
+
+    const btn6 = document.createElement('button');
+    btn6.className = 'control-button start-button';
+    btn6.textContent = `🚀 启动 IPv6`;
+    const isIPv6Valid = isValidIPv6(node.ipv6_server);
+    if (isIPv6Valid) {
+        btn6.onclick = () => startVPN(selectedNodeId, 'ipv6');
+    } else {
+        btn6.disabled = true;
+        btn6.title = '无效或未配置 IPv6 地址 (格式应为 [::1]:端口)';
     }
+    container.appendChild(btn6);
 }
 
 function renderSettingsTable() {
@@ -171,12 +197,13 @@ function renderSettingsTable() {
         const row = document.createElement('tr');
         row.setAttribute('data-id', node.id);
         const cleanName = getCleanName(node.name);
+        // 为 input 添加 aria-label 属性以提升可访问性
         row.innerHTML = `
-            <td><input type="text" class="node-name" value="${cleanName}"></td>
-            <td><input type="text" class="node-ipv4" value="${node.ipv4_server || ''}"></td>
-            <td><input type="text" class="node-ipv6" value="${node.ipv6_server || ''}"></td>
-            <td><input type="text" class="node-key" value="${node.key || ''}"></td>
-            <td><button class="action-button delete-btn" onclick="this.closest('tr').remove()">删除</button></td>
+            <td><input type="text" class="node-name" value="${cleanName}" aria-label="节点名称"></td>
+            <td><input type="text" class="node-ipv4" value="${node.ipv4_server || ''}" aria-label="IPv4 地址:端口"></td>
+            <td><input type="text" class="node-ipv6" value="${node.ipv6_server || ''}" aria-label="IPv6 地址:端口"></td>
+            <td><input type="text" class="node-key" value="${node.key || ''}" aria-label="连接密码"></td>
+            <td><button class="control-button delete-btn" onclick="this.closest('tr').remove()">删除</button></td>
         `;
         tbody.appendChild(row);
     });
@@ -204,12 +231,13 @@ function addNewNodeRow() {
     const newId = `node_${Date.now()}`;
     const row = document.createElement('tr');
     row.setAttribute('data-id', newId);
+    // 为 input 添加 aria-label 和 placeholder
     row.innerHTML = `
-        <td><input type="text" class="node-name" placeholder="例如: 日本节点"></td>
-        <td><input type="text" class="node-ipv4" placeholder="1.2.3.4:39001"></td>
-        <td><input type="text" class="node-ipv6" placeholder="[::1]:39002"></td>
-        <td><input type="text" class="node-key" placeholder="连接密码"></td>
-        <td><button class="action-button delete-btn" onclick="this.closest('tr').remove()">删除</button></td>
+        <td><input type="text" class="node-name" placeholder="例如: 日本" aria-label="新节点名称"></td>
+        <td><input type="text" class="node-ipv4" placeholder="1.2.3.4:39001" aria-label="新节点 IPv4 地址"></td>
+        <td><input type="text" class="node-ipv6" placeholder="[::1]:39002" aria-label="新节点 IPv6 地址"></td>
+        <td><input type="text" class="node-key" placeholder="连接密码" aria-label="新节点连接密码"></td>
+        <td><button class="control-button delete-btn" onclick="this.closest('tr').remove()">删除</button></td>
     `;
     tbody.appendChild(row);
 }
@@ -219,13 +247,13 @@ function saveConfig() {
     const rows = document.querySelectorAll('#nodes-table-body tr');
     rows.forEach(row => {
         const nameInput = row.querySelector('.node-name').value.trim();
-        if (!nameInput) return; // 如果名字为空，则忽略此行
+        if (!nameInput) return;
         
         const cleanName = getCleanName(nameInput);
 
         newNodes.push({
             id: row.getAttribute('data-id'),
-            name: cleanName, // 保存清理后的名称
+            name: cleanName,
             ipv4_server: row.querySelector('.node-ipv4').value.trim(),
             ipv6_server: row.querySelector('.node-ipv6').value.trim(),
             key: row.querySelector('.node-key').value.trim(),
