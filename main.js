@@ -59,8 +59,9 @@ function startVpnProcess(command) {
         if (!vpnStarted && data.includes('client_ready')) {
             vpnStarted = true;
             console.log('udp2raw handshake succeeded. Starting WireGuard via AppleScript...');
-            win.webContents.send('pty-data', '\n\n\x1b[32m[INFO] udp2raw 握手成功，正在启动 WireGuard...\x1b[0m\n');
-            startWireGuardAppleScript();
+            const node = appConfig.nodes.find(n => n.id === ptyProcess.nodeId);
+            win.webContents.send('pty-data', `\n\n\x1b[32m[INFO] udp2raw 握手成功，正在启动 WireGuard 隧道: ${node.name}...\x1b[0m\n`);
+            startWireGuardAppleScript(node.name);
         }
     });
 
@@ -116,6 +117,12 @@ ipcMain.on('start-vpn', (event, { nodeId, ipVersion }) => {
     const udp2rawCmd = `sudo ${binaryPath} -c -l 127.0.0.1:29999 -r ${serverAddress} -k "${key}" --raw-mode easyfaketcp --cipher-mode xor\n`;
     
     startVpnProcess(udp2rawCmd);
+
+    // 将 nodeId 附加到 ptyProcess 对象上，以便稍后查找节点名称
+    // 必须在 startVpnProcess 创建了 ptyProcess 之后再执行
+    if (ptyProcess) {
+        ptyProcess.nodeId = nodeId;
+    }
 });
 
 ipcMain.on('pty-input', (event, data) => {
@@ -124,14 +131,15 @@ ipcMain.on('pty-input', (event, data) => {
     }
 });
 
-function startWireGuardAppleScript() {
-    const wgUpCommand = 'osascript "/Users/rocket/Library/Mobile Documents/com~apple~ScriptEditor2/Documents/wg-up.scpt"';
+function startWireGuardAppleScript(tunnelName) {
+    // 将隧道名称作为参数传递给 AppleScript
+    const wgUpCommand = `osascript "/Users/rocket/Library/Mobile Documents/com~apple~ScriptEditor2/Documents/wg-up.scpt" "${tunnelName}"`;
     exec(wgUpCommand, (error, stdout, stderr) => {
         if (error || stderr) {
             const errorMessage = `启动 WireGuard 失败: ${stderr || error.message}`;
             console.error(errorMessage);
             win.webContents.send('vpn-error', errorMessage);
-            if (ptyProcess) ptyProcess.kill();
+            if (ptyProcess) { ptyProcess.kill(); }
             return;
         }
         console.log('AppleScript (up) stdout:', stdout);

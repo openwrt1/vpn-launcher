@@ -6,7 +6,7 @@
       "name": "美国",
       "ipv4_server": "64.69.34.176:39001",
       "ipv6_server": "[2607:f130:0:140::491b:567c]:39002",
-      "key": "Po7a6IZOqMqdhnYq"
+      "key": "xxJWPjDr2oR2NVbP"
     },
     {
       "id": "de",
@@ -20,7 +20,7 @@
       "name": "意大利",
       "ipv4_server": "your_italian_ipv4:port",
       "ipv6_server": "[2a05:4140:3::3da3:18]:39002",
-      "key": "XKAxix0JFtIWNh6T"
+      "key": "9NEBlZR7ovmfCO7B"
     }
   ]
 }
