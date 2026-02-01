@@ -70,13 +70,15 @@ document.addEventListener('DOMContentLoaded', () => {
     window.addEventListener('resize', () => fitAddon.fit());
     setupIPCListeners();
     ipcRenderer.send('get-config');
+    ipcRenderer.send('get-network-interfaces');
 });
 
 // --- IPC 通信 ---
 function setupIPCListeners() {
     ipcRenderer.on('pty-data', (event, data) => term.write(data));
-    ipcRenderer.on('vpn-started', () => term.write('\n\n\x1b[32m✅ WireGuard 启动成功！\x1b[0m\n'));
-    ipcRenderer.on('vpn-stopped', () => term.write('\n\n\x1b[31m🛑 VPN 已停止。\x1b[0m\n'));
+    // 修改成功提示信息
+    ipcRenderer.on('vpn-started', () => term.write('\n\n\x1b[32m✅ udp2raw 连接成功！请手动启动 WireGuard。\x1b[0m\n'));
+    ipcRenderer.on('vpn-stopped', () => term.write('\n\n\x1b[31m🛑 udp2raw 连接已断开。\x1b[0m\n'));
     ipcRenderer.on('vpn-error', (event, msg) => term.write(`\n\n\x1b[31m❌ 操作失败: ${msg}\x1b[0m\n`));
     term.onData(data => ipcRenderer.send('pty-input', data));
 
@@ -87,11 +89,25 @@ function setupIPCListeners() {
 
     ipcRenderer.on('config-saved-success', (event, path) => {
         alert(`✅ 配置已成功保存！\n\n路径: ${path}`);
-        ipcRenderer.send('get-config'); // 重新获取配置以刷新整个 UI
+        ipcRenderer.send('get-config');
     });
 
     ipcRenderer.on('config-saved-failure', (event, error) => {
         alert(`❌ 保存失败！\n\n原因: ${error}`);
+    });
+
+    ipcRenderer.on('network-interfaces-data', (event, interfaces) => {
+        const selector = document.getElementById('network-interface-selector');
+        selector.innerHTML = '<option value="auto">自动选择</option>';
+        interfaces.forEach(iface => {
+            const option = document.createElement('option');
+            option.value = iface;
+            option.textContent = iface;
+            selector.appendChild(option);
+        });
+        if (appConfig) {
+            renderGlobalSettings();
+        }
     });
 }
 
@@ -139,9 +155,15 @@ function getNodeDisplayName(nodeName) {
 // --- UI 更新 ---
 function updateUI() {
     if (!appConfig) return;
+    renderGlobalSettings();
     populateNodeSelector();
     updateStartButtons();
     renderSettingsTable();
+}
+
+function renderGlobalSettings() {
+    const selector = document.getElementById('network-interface-selector');
+    selector.value = appConfig.networkInterface || 'auto';
 }
 
 function populateNodeSelector() {
@@ -197,7 +219,6 @@ function renderSettingsTable() {
         const row = document.createElement('tr');
         row.setAttribute('data-id', node.id);
         const cleanName = getCleanName(node.name);
-        // 为 input 添加 aria-label 属性以提升可访问性
         row.innerHTML = `
             <td><input type="text" class="node-name" value="${cleanName}" aria-label="节点名称"></td>
             <td><input type="text" class="node-ipv4" value="${node.ipv4_server || ''}" aria-label="IPv4 地址:端口"></td>
@@ -231,7 +252,6 @@ function addNewNodeRow() {
     const newId = `node_${Date.now()}`;
     const row = document.createElement('tr');
     row.setAttribute('data-id', newId);
-    // 为 input 添加 aria-label 和 placeholder
     row.innerHTML = `
         <td><input type="text" class="node-name" placeholder="例如: 日本" aria-label="新节点名称"></td>
         <td><input type="text" class="node-ipv4" placeholder="1.2.3.4:39001" aria-label="新节点 IPv4 地址"></td>
@@ -243,6 +263,8 @@ function addNewNodeRow() {
 }
 
 function saveConfig() {
+    const selectedInterface = document.getElementById('network-interface-selector').value;
+    
     const newNodes = [];
     const rows = document.querySelectorAll('#nodes-table-body tr');
     rows.forEach(row => {
@@ -260,6 +282,10 @@ function saveConfig() {
         });
     });
 
-    const newConfig = { ...appConfig, nodes: newNodes };
+    const newConfig = { 
+        ...appConfig, 
+        nodes: newNodes,
+        networkInterface: selectedInterface
+    };
     ipcRenderer.send('save-config', newConfig);
 }
